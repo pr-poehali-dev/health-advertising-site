@@ -25,8 +25,12 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
     urgency: 'standard',
     contactMethod: 'email',
     agreedToTerms: false,
-    volume: 'small'
+    volume: 'small',
+    promoCode: '',
+    isReturningClient: false
   });
+  
+  const [promoValidation, setPromoValidation] = useState({ isValid: false, message: '', discount: 0 });
 
   const services = [
     { value: 'healing', label: 'Лечебные настрои', icon: 'Heart', basePrice: 3000 },
@@ -65,14 +69,46 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
     ]
   };
 
+  // Система промокодов и скидок
+  const promoCodes = {
+    'ПЕРВЫЙ10': { discount: 10, description: 'Скидка 10% для новых клиентов' },
+    'ЗДОРОВЬЕ15': { discount: 15, description: 'Скидка 15% на лечебные настрои' },
+    'ТЕКСТ20': { discount: 20, description: 'Скидка 20% на создание текстов' },
+    'ПОСТОЯННЫЙ25': { discount: 25, description: 'Скидка 25% для постоянных клиентов' },
+    'ПРАЗДНИК30': { discount: 30, description: 'Праздничная скидка 30%' }
+  };
+  
+  const validatePromoCode = (code: string) => {
+    const upperCode = code.toUpperCase().trim();
+    if (!upperCode) {
+      setPromoValidation({ isValid: false, message: '', discount: 0 });
+      return;
+    }
+    
+    const promo = promoCodes[upperCode as keyof typeof promoCodes];
+    if (promo) {
+      setPromoValidation({ 
+        isValid: true, 
+        message: promo.description, 
+        discount: promo.discount 
+      });
+    } else {
+      setPromoValidation({ 
+        isValid: false, 
+        message: 'Промокод не найден или недействителен', 
+        discount: 0 
+      });
+    }
+  };
+  
   const calculatePrice = () => {
-    if (!formData.service) return 0;
+    if (!formData.service) return { original: 0, final: 0, savings: 0, discount: 0 };
     
     const service = services.find(s => s.value === formData.service);
-    if (!service) return 0;
+    if (!service) return { original: 0, final: 0, savings: 0, discount: 0 };
     
     const volumeOption = volumeOptions[formData.service as keyof typeof volumeOptions]?.find(v => v.value === formData.volume);
-    if (!volumeOption) return 0;
+    if (!volumeOption) return { original: 0, final: 0, savings: 0, discount: 0 };
     
     let basePrice = service.basePrice * volumeOption.multiplier;
     
@@ -83,7 +119,26 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
       basePrice *= 2;
     }
     
-    return Math.round(basePrice);
+    const originalPrice = Math.round(basePrice);
+    let totalDiscount = 0;
+    
+    // Скидка для постоянных клиентов
+    if (formData.isReturningClient) {
+      totalDiscount += 10;
+    }
+    
+    // Скидка по промокоду
+    if (promoValidation.isValid) {
+      totalDiscount += promoValidation.discount;
+    }
+    
+    // Максимальная скидка 50%
+    totalDiscount = Math.min(totalDiscount, 50);
+    
+    const finalPrice = Math.round(originalPrice * (1 - totalDiscount / 100));
+    const savings = originalPrice - finalPrice;
+    
+    return { original: originalPrice, final: finalPrice, savings, discount: totalDiscount };
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -93,9 +148,24 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
       return;
     }
     
-    const finalPrice = calculatePrice();
-    console.log('Заказ отправлен:', { ...formData, estimatedPrice: finalPrice });
-    alert(`Спасибо за заказ! Предварительная стоимость: ${finalPrice.toLocaleString()} ₽. Мы свяжемся с вами в ближайшее время.`);
+    const pricing = calculatePrice();
+    console.log('Заказ отправлен:', { 
+      ...formData, 
+      pricing: {
+        originalPrice: pricing.original,
+        finalPrice: pricing.final,
+        discount: pricing.discount,
+        savings: pricing.savings
+      }
+    });
+    
+    let message = `Спасибо за заказ! `;
+    if (pricing.savings > 0) {
+      message += `Вы экономите ${pricing.savings.toLocaleString()} ₽! `;
+    }
+    message += `Стоимость к оплате: ${pricing.final.toLocaleString()} ₽. Мы свяжемся с вами в ближайшее время.`;
+    
+    alert(message);
     onClose();
   };
 
@@ -279,6 +349,82 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
               </RadioGroup>
             </div>
 
+            {/* Скидки и промокоды */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center">
+                <Icon name="Percent" className="mr-2" size={20} />
+                Скидки и бонусы
+              </h3>
+              
+              <div className="space-y-4">
+                {/* Постоянный клиент */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="returning-client" 
+                    checked={formData.isReturningClient}
+                    onCheckedChange={(checked) => setFormData({...formData, isReturningClient: !!checked})}
+                  />
+                  <Label htmlFor="returning-client" className="flex items-center">
+                    <Icon name="Star" className="mr-1" size={16} />
+                    Я постоянный клиент (скидка 10%)
+                  </Label>
+                </div>
+                
+                {/* Промокод */}
+                <div className="space-y-2">
+                  <Label htmlFor="promo-code">Промокод</Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id="promo-code"
+                      value={formData.promoCode}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        setFormData({...formData, promoCode: code});
+                        validatePromoCode(code);
+                      }}
+                      placeholder="Введите промокод"
+                      className={promoValidation.isValid ? 'border-green-500' : 
+                               (promoValidation.message && !promoValidation.isValid) ? 'border-red-500' : ''}
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => validatePromoCode(formData.promoCode)}
+                    >
+                      <Icon name="Check" size={16} />
+                    </Button>
+                  </div>
+                  
+                  {promoValidation.message && (
+                    <p className={`text-sm flex items-center ${
+                      promoValidation.isValid ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      <Icon 
+                        name={promoValidation.isValid ? "CheckCircle" : "XCircle"} 
+                        size={16} 
+                        className="mr-1" 
+                      />
+                      {promoValidation.message}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Доступные промокоды */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-sm mb-2 text-blue-800">
+                    <Icon name="Tag" className="mr-1 inline" size={14} />
+                    Доступные промокоды:
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-blue-700">
+                    <div>• ПЕРВЫЙ10 - скидка 10% новым клиентам</div>
+                    <div>• ЗДОРОВЬЕ15 - 15% на лечебные настрои</div>
+                    <div>• ТЕКСТ20 - 20% на создание текстов</div>
+                    <div>• ПОСТОЯННЫЙ25 - 25% постоянным клиентам</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Калькулятор стоимости */}
             {formData.service && (
               <Card className="bg-gradient-to-r from-purple-50 to-green-50 border-purple-200">
@@ -289,42 +435,79 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
                   </h3>
                   
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Базовая стоимость:</span>
-                      <span className="font-medium">
-                        {services.find(s => s.value === formData.service)?.basePrice.toLocaleString()} ₽
-                      </span>
-                    </div>
-                    
-                    {formData.volume !== 'small' && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Объем работы:</span>
-                        <span className="font-medium">
-                          ×{volumeOptions[formData.service as keyof typeof volumeOptions]?.find(v => v.value === formData.volume)?.multiplier || 1}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {formData.urgency !== 'standard' && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Срочность:</span>
-                        <span className="font-medium text-orange-600">
-                          +{formData.urgency === 'fast' ? '50%' : '100%'}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div className="border-t pt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-lg font-semibold">Итого:</span>
-                        <span className="text-2xl font-bold text-purple-600">
-                          {calculatePrice().toLocaleString()} ₽
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        *Окончательная стоимость может быть скорректирована после обсуждения деталей
-                      </p>
-                    </div>
+                    {(() => {
+                      const pricing = calculatePrice();
+                      return (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600">Базовая стоимость:</span>
+                            <span className="font-medium">
+                              {services.find(s => s.value === formData.service)?.basePrice.toLocaleString()} ₽
+                            </span>
+                          </div>
+                          
+                          {formData.volume !== 'small' && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600">Объем работы:</span>
+                              <span className="font-medium">
+                                ×{volumeOptions[formData.service as keyof typeof volumeOptions]?.find(v => v.value === formData.volume)?.multiplier || 1}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {formData.urgency !== 'standard' && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600">Срочность:</span>
+                              <span className="font-medium text-orange-600">
+                                +{formData.urgency === 'fast' ? '50%' : '100%'}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {pricing.discount > 0 && (
+                            <>
+                              <div className="border-t pt-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-gray-600">Стоимость до скидки:</span>
+                                  <span className="font-medium line-through text-gray-500">
+                                    {pricing.original.toLocaleString()} ₽
+                                  </span>
+                                </div>
+                                
+                                <div className="flex justify-between items-center">
+                                  <span className="text-gray-600 flex items-center">
+                                    <Icon name="Percent" className="mr-1" size={16} />
+                                    Общая скидка:
+                                  </span>
+                                  <span className="font-medium text-green-600">
+                                    -{pricing.discount}% (-{pricing.savings.toLocaleString()} ₽)
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          
+                          <div className="border-t pt-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-semibold">К оплате:</span>
+                              <div className="text-right">
+                                <span className="text-2xl font-bold text-purple-600">
+                                  {pricing.final.toLocaleString()} ₽
+                                </span>
+                                {pricing.savings > 0 && (
+                                  <div className="text-sm text-green-600 font-medium">
+                                    Экономия: {pricing.savings.toLocaleString()} ₽
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1">
+                              *Окончательная стоимость может быть скорректирована после обсуждения деталей
+                            </p>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -344,9 +527,9 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
 
             {/* Кнопки */}
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <Button type="submit" className="flex-1" disabled={!formData.service || calculatePrice() === 0}>
+              <Button type="submit" className="flex-1" disabled={!formData.service || calculatePrice().final === 0}>
                 <Icon name="Send" className="mr-2" size={16} />
-                Отправить заказ {formData.service && `(${calculatePrice().toLocaleString()} ₽)`}
+                Отправить заказ {formData.service && `(${calculatePrice().final.toLocaleString()} ₽)`}
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 Отмена
