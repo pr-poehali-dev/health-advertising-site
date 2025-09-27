@@ -3,10 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import OrderForm from '@/components/OrderForm';
 
 const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(0);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [selectedService, setSelectedService] = useState('');
 
   const audioTracks = [
     { title: 'Настрой на здоровье', duration: '15:30', category: 'Здоровье' },
@@ -86,7 +89,15 @@ const Index = () => {
                   <Icon name="Play" className="mr-2" size={20} />
                   Начать прослушивание
                 </Button>
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-purple-600">
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  className="border-white text-white hover:bg-white hover:text-purple-600"
+                  onClick={() => {
+                    setSelectedService('texts');
+                    setShowOrderForm(true);
+                  }}
+                >
                   <Icon name="MessageCircle" className="mr-2" size={20} />
                   Заказать текст
                 </Button>
@@ -174,7 +185,20 @@ const Index = () => {
                       </li>
                     ))}
                   </ul>
-                  <Button className="w-full">Узнать подробнее</Button>
+                  <Button 
+                    className="w-full"
+                    onClick={() => {
+                      const serviceMap: Record<string, string> = {
+                        'Лечебные настрои': 'healing',
+                        'Создание текстов': 'texts',
+                        'Стихи и сценарии': 'poetry'
+                      };
+                      setSelectedService(serviceMap[service.title] || '');
+                      setShowOrderForm(true);
+                    }}
+                  >
+                    Заказать услугу
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -216,11 +240,26 @@ const Index = () => {
             Получите персональную консультацию и узнайте, какие настрои подойдут именно вам
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-purple-600 hover:bg-blue-50">
+            <Button 
+              size="lg" 
+              className="bg-white text-purple-600 hover:bg-blue-50"
+              onClick={() => {
+                setSelectedService('');
+                setShowOrderForm(true);
+              }}
+            >
               <Icon name="Phone" className="mr-2" size={20} />
               Записаться на консультацию
             </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-purple-600">
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="border-white text-white hover:bg-white hover:text-purple-600"
+              onClick={() => {
+                setSelectedService('');
+                setShowOrderForm(true);
+              }}
+            >
               <Icon name="Mail" className="mr-2" size={20} />
               Написать письмо
             </Button>
@@ -287,6 +326,14 @@ const Index = () => {
           </div>
         </div>
       </footer>
+      
+      {/* Order Form Modal */}
+      {showOrderForm && (
+        <OrderForm 
+          onClose={() => setShowOrderForm(false)}
+          initialService={selectedService}
+        />
+      )}
     </div>
   );
 };
