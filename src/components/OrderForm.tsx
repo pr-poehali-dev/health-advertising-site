@@ -24,14 +24,15 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
     description: '',
     urgency: 'standard',
     contactMethod: 'email',
-    agreedToTerms: false
+    agreedToTerms: false,
+    volume: 'small'
   });
 
   const services = [
-    { value: 'healing', label: 'Лечебные настрои', icon: 'Heart' },
-    { value: 'texts', label: 'Создание текстов', icon: 'PenTool' },
-    { value: 'poetry', label: 'Стихи и поздравления', icon: 'BookOpen' },
-    { value: 'scripts', label: 'Сценарии мероприятий', icon: 'FileText' }
+    { value: 'healing', label: 'Лечебные настрои', icon: 'Heart', basePrice: 3000 },
+    { value: 'texts', label: 'Создание текстов', icon: 'PenTool', basePrice: 1500 },
+    { value: 'poetry', label: 'Стихи и поздравления', icon: 'BookOpen', basePrice: 2000 },
+    { value: 'scripts', label: 'Сценарии мероприятий', icon: 'FileText', basePrice: 5000 }
   ];
 
   const categories = {
@@ -41,6 +42,50 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
     scripts: ['Корпоратив', 'День рождения', 'Свадьба', 'Выпускной', 'Новый год']
   };
 
+  const volumeOptions = {
+    healing: [
+      { value: 'small', label: '1 настрой (до 15 мин)', multiplier: 1 },
+      { value: 'medium', label: '3 настроя (до 45 мин)', multiplier: 2.5 },
+      { value: 'large', label: '5 настроев (до 90 мин)', multiplier: 4 }
+    ],
+    texts: [
+      { value: 'small', label: 'Короткий текст (до 500 слов)', multiplier: 1 },
+      { value: 'medium', label: 'Средний текст (до 1500 слов)', multiplier: 2 },
+      { value: 'large', label: 'Большой текст (до 3000 слов)', multiplier: 3.5 }
+    ],
+    poetry: [
+      { value: 'small', label: '1 стихотворение', multiplier: 1 },
+      { value: 'medium', label: '3-5 стихотворений', multiplier: 2.2 },
+      { value: 'large', label: 'Поэтический сборник (10+ стихов)', multiplier: 4 }
+    ],
+    scripts: [
+      { value: 'small', label: 'Короткий сценарий (до 30 мин)', multiplier: 1 },
+      { value: 'medium', label: 'Полный сценарий (1-2 часа)', multiplier: 2 },
+      { value: 'large', label: 'Развернутый сценарий (3+ часа)', multiplier: 3 }
+    ]
+  };
+
+  const calculatePrice = () => {
+    if (!formData.service) return 0;
+    
+    const service = services.find(s => s.value === formData.service);
+    if (!service) return 0;
+    
+    const volumeOption = volumeOptions[formData.service as keyof typeof volumeOptions]?.find(v => v.value === formData.volume);
+    if (!volumeOption) return 0;
+    
+    let basePrice = service.basePrice * volumeOption.multiplier;
+    
+    // Добавляем наценку за срочность
+    if (formData.urgency === 'fast') {
+      basePrice *= 1.5;
+    } else if (formData.urgency === 'urgent') {
+      basePrice *= 2;
+    }
+    
+    return Math.round(basePrice);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.agreedToTerms) {
@@ -48,8 +93,9 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
       return;
     }
     
-    console.log('Заказ отправлен:', formData);
-    alert('Спасибо за заказ! Мы свяжемся с вами в ближайшее время.');
+    const finalPrice = calculatePrice();
+    console.log('Заказ отправлен:', { ...formData, estimatedPrice: finalPrice });
+    alert(`Спасибо за заказ! Предварительная стоимость: ${finalPrice.toLocaleString()} ₽. Мы свяжемся с вами в ближайшее время.`);
     onClose();
   };
 
@@ -141,20 +187,38 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
               </div>
             </div>
 
-            {/* Категория */}
+            {/* Категория и объем */}
             {formData.service && (
               <div className="space-y-4">
-                <Label>Тематика</Label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите тематику" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories[formData.service as keyof typeof categories]?.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Тематика</Label>
+                    <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите тематику" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories[formData.service as keyof typeof categories]?.map((cat) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>Объем работы</Label>
+                    <Select value={formData.volume} onValueChange={(value) => setFormData({...formData, volume: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите объем" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {volumeOptions[formData.service as keyof typeof volumeOptions]?.map((volume) => (
+                          <SelectItem key={volume.value} value={volume.value}>{volume.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -215,6 +279,57 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
               </RadioGroup>
             </div>
 
+            {/* Калькулятор стоимости */}
+            {formData.service && (
+              <Card className="bg-gradient-to-r from-purple-50 to-green-50 border-purple-200">
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Icon name="Calculator" className="mr-2" size={20} />
+                    Расчет стоимости
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Базовая стоимость:</span>
+                      <span className="font-medium">
+                        {services.find(s => s.value === formData.service)?.basePrice.toLocaleString()} ₽
+                      </span>
+                    </div>
+                    
+                    {formData.volume !== 'small' && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Объем работы:</span>
+                        <span className="font-medium">
+                          ×{volumeOptions[formData.service as keyof typeof volumeOptions]?.find(v => v.value === formData.volume)?.multiplier || 1}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {formData.urgency !== 'standard' && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Срочность:</span>
+                        <span className="font-medium text-orange-600">
+                          +{formData.urgency === 'fast' ? '50%' : '100%'}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="border-t pt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-semibold">Итого:</span>
+                        <span className="text-2xl font-bold text-purple-600">
+                          {calculatePrice().toLocaleString()} ₽
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        *Окончательная стоимость может быть скорректирована после обсуждения деталей
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Согласие */}
             <div className="flex items-center space-x-2">
               <Checkbox 
@@ -229,9 +344,9 @@ const OrderForm = ({ onClose, initialService = '' }: OrderFormProps) => {
 
             {/* Кнопки */}
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={!formData.service || calculatePrice() === 0}>
                 <Icon name="Send" className="mr-2" size={16} />
-                Отправить заказ
+                Отправить заказ {formData.service && `(${calculatePrice().toLocaleString()} ₽)`}
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 Отмена
